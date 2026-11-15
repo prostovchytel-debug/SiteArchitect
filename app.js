@@ -8,8 +8,8 @@
   const cloud = configured && !!window.supabase;
   const db = cloud ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, { auth: { persistSession: true, autoRefreshToken: true } }) : null;
   const demo = !configured;
-  const state = { page:'dashboard', step:0, authMode:'login', profile:null, user:null,
-    works:[], teacherWorks:[], profiles:[], work:null, selected:'home',
+  const state = { page:'dashboard', step:0, authMode:'student', profile:null, user:null,
+    works:[], teacherWorks:[], profiles:[], reviews:[], teacherReviews:[], work:null, selected:'home',
     teacherQuery:'', teacherStatus:'submitted', teacherClass:'all', viewed:null,
     busy:false, authMessage:'', authError:'', demoProfile: null };
   const steps = ['Паспорт', 'Контент', 'Групування', 'Дерево сайту', 'Результат'];
@@ -65,47 +65,61 @@
   function findDuplicates(p){const seen=new Set(),dups=[];for(const n of p.nodes){const k=`${n.parentId||''}|${n.label.toLowerCase().trim()}`;if(seen.has(k))dups.push(n.label);seen.add(k);}return dups;}
   function validForSubmit(p){const a=analysis(p);return a.specs.slice(0,4).every(x=>x.ok) && a.specs[5].ok && a.specs[6].ok && a.specs[7].ok;}
 
-  function renderAuth(){let mode=state.authMode;root.innerHTML=`<main class="auth-page"><section class="auth-intro">
-     <div class="logo"><span class="logo-mark">⌘</span> SiteArchitect <b>11</b></div>
-     <div style="margin-top:30px"><span class="eyebrow">Інформатика • 11 клас • практична місія</span></div>
-     <h1 class="heading">Створи <span>архітектуру</span> свого майбутнього сайту.</h1>
-     <p>Від ідеї до професійної карти сторінок. Придумай сайт, сплануй контент, згрупуй розділи та створи власне дерево навігації.</p>
-     <div class="auth-features"><div class="auth-feature"><span class="feature-icon">01</span>Покроковий конструктор із підказками</div><div class="auth-feature"><span class="feature-icon">02</span>Автоматична схема і перевірка логіки</div><div class="auth-feature"><span class="feature-icon">03</span>Збереження роботи та експорт PNG</div></div>
-     </section><section class="card auth-box"><span class="eyebrow">${demo?'Демонстраційна версія':'Простір учня та вчителя'}</span>
-     <h2 class="h2" style="font-size:26px;margin-top:9px">${demo?'Ласкаво просимо!':mode==='login'?'Увійдіть до майстерні':'Створіть обліковий запис'}</h2>
-     <p class="desc">${demo?'Почніть роботу без налаштування сервера. Проєкти зберігаються лише у цьому браузері.':mode==='login'?'Увійдіть, щоб продовжити роботу над власними проєктами.':'Укажіть справжнє ім’я та клас, щоб учитель упізнав вашу роботу.'}</p>
-     ${demo?`<div class="notice warn" style="margin-bottom:17px">Деморежим: спільної бази та приватного кабінету вчителя поки немає. Для цього потрібно підключити Supabase за інструкцією у README.</div>
-     <form id="demo-form"><div class="field"><label>Ім’я та прізвище</label><input name="fullName" required maxlength="100" placeholder="Олена Коваленко" value="${h(state.demoProfile?.full_name||'')}" /></div>
-     <div class="field"><label>Клас</label><input name="className" required maxlength="20" placeholder="11-А" value="${h(state.demoProfile?.class_name||'')}" /></div>
-     <button class="btn primary full" type="submit">Розпочати конструювання →</button></form>`:
-     `<div class="auth-tabs"><button data-action="auth-mode" data-mode="login" class="${mode==='login'?'active':''}">Увійти</button><button data-action="auth-mode" data-mode="signup" class="${mode==='signup'?'active':''}">Реєстрація</button></div>
-     <form id="auth-form">${mode==='signup'?`<div class="field"><label>Ім’я та прізвище</label><input name="fullName" required maxlength="100" placeholder="Олена Коваленко" /></div><div class="field"><label>Клас</label><input name="className" required maxlength="20" placeholder="11-А" /></div>`:''}
-     <div class="field"><label>Електронна пошта</label><input type="email" name="email" autocomplete="email" required placeholder="student@example.com" /></div>
-     <div class="field"><label>Пароль (не менше 6 символів)</label><input type="password" name="password" minlength="6" autocomplete="${mode==='signup'?'new-password':'current-password'}" required placeholder="••••••••" /></div>
-     <button class="btn primary full" type="submit">${mode==='signup'?'Зареєструватися':'Увійти'} →</button></form>
-     ${mode==='login'?`<button class="btn ghost full" style="margin-top:10px" data-action="reset-password">Забули пароль?</button>`:''}
-     ${state.authMessage?`<div class="notice good" style="margin-top:13px">${h(state.authMessage)}</div>`:''}
-     ${state.authError?`<div class="notice warn" style="margin-top:13px">${h(state.authError)}</div>`:''}`}
-     <div class="auth-footer">SiteArchitect 11 · Тема: «Інформаційна структура сайту»<br/>${demo?'Для публікації потрібні GitHub Pages + Supabase.':'Усі проєкти зберігаються з розмежуванням прав доступу.'}</div></section></main>`;}
+  function renderAuth(){
+    const teacher = state.authMode === 'teacher';
+    root.innerHTML=`<main class="auth-page"><section class="auth-intro">
+      <div class="logo"><span class="logo-mark">⌘</span> SiteArchitect <b>11</b></div>
+      <div style="margin-top:30px"><span class="eyebrow">Інформатика • 11 клас • практична місія</span></div>
+      <h1 class="heading">Створи <span>архітектуру</span> свого майбутнього сайту.</h1>
+      <p>Від ідеї до карти сторінок: сплануй контент, згрупуй розділи та побудуй власне дерево навігації.</p>
+      <div class="auth-features">
+        <div class="auth-feature"><span class="feature-icon">01</span>П’ять навчальних етапів і підказки</div>
+        <div class="auth-feature"><span class="feature-icon">02</span>Автоматична схема та перевірка логіки</div>
+        <div class="auth-feature"><span class="feature-icon">03</span>Здати вчителю, отримати коментар та оцінку</div>
+      </div>
+    </section><section class="card auth-box">
+      <span class="eyebrow">${demo?'Демонстраційна версія':'Практична робота · 11 клас'}</span>
+      <h2 class="h2" style="font-size:26px;margin-top:9px">${teacher?'Вхід для вчителя':'Розпочни свою роботу'}</h2>
+      <p class="desc">${teacher?'Використовуйте ваш існуючий обліковий запис учителя.': 'Без реєстрації, пошти й пароля. Уведи своє ім’я та клас.'}</p>
+      ${!demo?`<div class="auth-tabs"><button data-action="auth-mode" data-mode="student" class="${!teacher?'active':''}">Я учень</button><button data-action="auth-mode" data-mode="teacher" class="${teacher?'active':''}">Я вчитель</button></div>`:''}
+      ${!teacher?`<form id="student-form">
+        <div class="field"><label for="student-name">Ім’я та прізвище</label><input id="student-name" name="fullName" required minlength="3" maxlength="100" autocomplete="name" placeholder="Наприклад: Олена Коваленко" /></div>
+        <div class="field"><label for="student-class">Клас</label><input id="student-class" name="className" required maxlength="20" placeholder="Наприклад: 11-А" /></div>
+        <button class="btn primary full" type="submit" ${state.busy?'disabled':''}>${state.busy?'Створюємо робочий простір…':'Розпочати проєкт →'}</button>
+      </form>
+      <div class="notice ${demo?'warn':'good'}" style="margin-top:14px">${demo?'Деморежим: робота зберігається лише в цьому браузері.':'Твоя робота зберігатиметься онлайн. Щоб повернутися до неї, використовуй той самий браузер і пристрій. Після виходу з тимчасового сеансу відновити доступ без учителя не вдасться.'}</div>`:
+      `<form id="teacher-form"><div class="field"><label for="teacher-email">Електронна пошта вчителя</label><input id="teacher-email" type="email" name="email" autocomplete="email" required placeholder="teacher@example.com" /></div>
+        <div class="field"><label for="teacher-password">Пароль</label><input id="teacher-password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" /></div>
+        <button class="btn primary full" type="submit" ${state.busy?'disabled':''}>Увійти до кабінету →</button></form>
+        <p class="small muted" style="margin-top:12px">Поштовий вхід потрібний лише вчителю. Нові облікові записи вчителів створює адміністратор.</p>`}
+      ${state.authMessage?`<div class="notice good" style="margin-top:13px">${h(state.authMessage)}</div>`:''}
+      ${state.authError?`<div class="notice warn" style="margin-top:13px">${h(state.authError)}</div>`:''}
+      <div class="auth-footer">SiteArchitect 11 · «Інформаційна структура сайту»<br/>${demo?'Демонстрація: без передавання робіт учителю.':'Права доступу захищаються в базі даних Supabase.'}</div>
+    </section></main>`;
+  }
   function navLink(action,label,icon,active){return `<button class="nav-link ${active?'active':''}" data-action="${action}" title="${h(label)}"><span class="ni">${icon}</span><span class="label">${h(label)}</span></button>`;}
   function shell(body){const teacher=state.profile?.role==='teacher';root.innerHTML=`<div class="layout"><aside class="sidebar">
     <div class="logo"><span class="logo-mark">⌘</span> SiteArchitect <b>11</b></div><div><div class="side-caption">Моя майстерня</div>
     ${navLink('dashboard',teacher?'Кабінет учителя':'Мої роботи','▦',state.page==='dashboard')}
-    ${!teacher?navLink('new-project','Новий проєкт','⊕',false):''}
+    ${!teacher&&!state.works.length?navLink('new-project','Новий проєкт','⊕',false):''}
     ${state.page==='editor'?navLink('editor-back','Конструктор','⌘',true):''}
-    </div><div class="side-bottom"><small>${demo?'Демонстраційний режим':teacher?'Профіль учителя':'Профіль учня'}</small><strong>${h(state.profile?.full_name)}</strong><small>${h(state.profile?.class_name||'Кабінет учителя')}</small><button class="btn sm ghost full" style="margin-top:10px" data-action="logout">Вийти</button></div>
-    </aside><main class="main"><div class="topbar"><div class="crumb">SiteArchitect 11 <span class="muted"> / </span> <strong>${teacher?'Teacher Studio':'Student Studio'}</strong></div><div class="top-right"><span class="pill">${demo?'◌ ДЕМО':'● Онлайн'}</span><button class="btn sm ghost" data-action="logout">Вийти ↗</button></div></div>${body}</main></div>`;}
+    </div><div class="side-bottom"><small>${demo?'Демонстраційний режим':teacher?'Профіль учителя':'Профіль учня'}</small><strong>${h(state.profile?.full_name)}</strong><small>${h(state.profile?.class_name||'Кабінет учителя')}</small><button class="btn sm ghost full" style="margin-top:10px" data-action="logout">${!teacher?'Завершити сеанс':'Вийти'}</button></div>
+    </aside><main class="main"><div class="topbar"><div class="crumb">SiteArchitect 11 <span class="muted"> / </span> <strong>${teacher?'Teacher Studio':'Student Studio'}</strong></div><div class="top-right"><span class="pill">${demo?'◌ ДЕМО':'● Онлайн'}</span><button class="btn sm ghost" data-action="logout">${!teacher?'Завершити сеанс ↗':'Вийти ↗'}</button></div></div>${body}</main></div>`;}
   function render(){if(!state.profile){renderAuth();return;}if(state.page==='editor'){renderEditor();return;}if(state.page==='detail'){renderTeacherDetail();return;}if(state.profile.role==='teacher')renderTeacherDashboard();else renderStudentDashboard();}
-  function workCard(w){const p=w.project||emptyWork(),a=analysis(p);return `<div class="work-card"><div><div class="btn-row"><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span><span class="small muted">${fmtDate(w.updated_at)}</span></div><h4>${h(p.name||'Без назви')}</h4><p>${h(kindLabels[p.kind]||'Тип ще не обрано')} · ${a.pages} сторінок · Готовність ${a.score}%</p></div><div class="work-actions"><button class="btn sm blue" data-action="edit-work" data-id="${h(w.id)}">Відкрити →</button><button class="btn sm ghost" data-action="export-work" data-id="${h(w.id)}">↓ PNG</button><button class="btn sm danger" data-action="delete-work" data-id="${h(w.id)}" title="Видалити роботу">✕</button></div></div>`;}
+  function reviewFor(id, teacher=false){return (teacher?state.teacherReviews:state.reviews).find(r=>r.project_id===id)||null;}
+  function reviewIsOutdated(w,r){return !!r && new Date(w.updated_at).getTime()>new Date(r.reviewed_at).getTime()+2000;}
+  function studentReviewMarkup(w){const r=reviewFor(w.id);if(!r)return w.status==='submitted'?'<span class="pill">Очікує перевірки</span>':'';
+    return `<div class="student-review"><div class="btn-row"><span class="grade-value">${r.grade} / 12</span><strong>Оцінка вчителя</strong>${reviewIsOutdated(w,r)?'<span class="status draft">Роботу змінено після перевірки</span>':''}</div>${r.comment?`<p>${h(r.comment)}</p>`:''}</div>`;}
+  function workCard(w){const p=w.project||emptyWork(),a=analysis(p);return `<div class="work-card"><div style="flex:1"><div class="btn-row"><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span><span class="small muted">${fmtDate(w.updated_at)}</span></div><h4>${h(p.name||'Без назви')}</h4><p>${h(kindLabels[p.kind]||'Тип ще не обрано')} · ${a.pages} сторінок · Готовність ${a.score}%</p>${studentReviewMarkup(w)}</div><div class="work-actions"><button class="btn sm blue" data-action="edit-work" data-id="${h(w.id)}">Відкрити →</button><button class="btn sm ghost" data-action="export-work" data-id="${h(w.id)}">↓ PNG</button>${w.status==='draft'?`<button class="btn sm danger" data-action="delete-work" data-id="${h(w.id)}" title="Видалити чернетку">✕</button>`:''}</div></div>`;}
   function renderStudentDashboard(){const works=[...state.works].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));const done=works.filter(x=>x.status==='submitted').length;shell(`<section class="hero"><span class="eyebrow">◈ Лабораторія вебархітектури</span>
     <h1 class="heading">Привіт, ${h((state.profile.full_name||'архітектор').split(' ')[0])}! <span>Плануємо сайт?</span></h1>
-    <p class="desc">Твоя місія: спроєктувати зручну інформаційну структуру майбутнього вебсайту. Почни з ідеї, продумай вміст сторінок, створи розділи та згенеруй карту навігації.</p><div class="btn-row"><button class="btn primary" data-action="new-project">+ Створити вебпроєкт</button><span class="pill">Практична робота · 11 клас</span></div></section>
-    ${demo?'<div class="notice warn" style="margin-bottom:17px">Це локальне демо. Учитель не отримає роботу автоматично; для спільного доступу необхідно підключити базу даних.</div>':''}
+    <p class="desc">Твоя місія: спроєктувати зручну інформаційну структуру майбутнього вебсайту. Почни з ідеї, продумай вміст сторінок, створи розділи та згенеруй карту навігації.</p><div class="btn-row">${!works.length?'<button class="btn primary" data-action="new-project">+ Створити вебпроєкт</button>':`<button class="btn primary" data-action="edit-work" data-id="${h(works[0].id)}">Продовжити свою роботу →</button>`}<span class="pill">Практична робота · 11 клас</span></div></section>
+    ${demo?'<div class="notice warn" style="margin-bottom:17px">Це локальне демо. Учитель не отримає роботу автоматично; для спільного доступу необхідно підключити базу даних.</div>':'<div class="notice" style="margin-bottom:17px">Ти працюєш без пошти й пароля. Не виходь із сеансу до завершення роботи. Після здачі можна завантажити PNG, а вчитель побачить проєкт у кабінеті.</div>'}
     <div class="grid3" style="margin-bottom:20px"><div class="stat"><small>Мої проєкти</small><b>${works.length}</b><small>Збережено</small></div><div class="stat"><small>Завершено</small><b>${done}</b><small>Надіслано вчителю</small></div><div class="stat"><small>У процесі</small><b>${works.length-done}</b><small>Можна редагувати</small></div></div>
     <section class="card"><div class="editor-heading"><div><h2 class="h2">Мої вебпроєкти</h2><p class="desc">Повернися до чернетки або відкрий готову роботу.</p></div></div>${works.length?works.map(workCard).join(''):`<div class="empty"><span class="empty-ico">⌘</span><h3>Поки що жодного проєкту</h3>Обери шаблон і створюй своє перше дерево сайту!</div>`}</section>
-    <section style="margin-top:22px"><h2 class="h2">Швидкий старт: обери ідею</h2><p class="desc">Усі шаблони можна повністю змінити. Це лише стартова точка.</p><div class="grid4">${templateCards()}</div></section>`);}
+    ${!works.length?`<section style="margin-top:22px"><h2 class="h2">Швидкий старт: обери ідею</h2><p class="desc">Усі шаблони можна повністю змінити. Це лише стартова точка.</p><div class="grid4">${templateCards()}</div></section>`:''}`);}
   function templateCards(){return [{id:'portfolio',icon:'✦',name:'Моє портфоліо',desc:'Роботи, досягнення та контакти'},{id:'education',icon:'▤',name:'Освітній ресурс',desc:'Предмети, уроки, матеріали'},{id:'shop',icon:'◈',name:'Інтернет-магазин',desc:'Каталог, товари, кошик'},{id:'blog',icon:'▧',name:'Авторський блог',desc:'Статті, теми, рубрики'}].map(t=>`<button class="template-card" data-action="create-template" data-template="${t.id}"><span class="template-icon">${t.icon}</span><strong>${t.name}</strong><span>${t.desc}</span><span style="color:var(--lime);margin-top:auto;padding-top:13px">Вибрати →</span></button>`).join('');}
-  function newProject(t='blank'){state.work={id:null,project:templates(t),status:'draft'};state.selected='home';state.step=0;state.page='editor';render();window.scrollTo(0,0);}
+  function newProject(t='blank'){if(state.works.length){toast('Для цієї домашньої роботи достатньо одного проєкту. Відкрий наявний.',true);return;}state.work={id:null,project:templates(t),status:'draft'};state.selected='home';state.step=0;state.page='editor';render();window.scrollTo(0,0);}
   function openProject(w){if(!w)return;state.work=clone(w);state.selected='home';state.step=0;state.page='editor';render();window.scrollTo(0,0);}
   function pageHeader(label,subtitle){return `<div class="editor-heading"><div><span class="eyebrow">${h(label)}</span><h1 class="h2" style="font-size:26px;margin:7px 0">${h(state.work.project.name||'Новий вебпроєкт')}</h1><p class="desc">${h(subtitle)}</p></div><div class="btn-row"><span class="status ${state.work.status==='submitted'?'done':'draft'}">${state.work.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span><button class="btn sm ghost" data-action="save-draft">Зберегти</button></div></div>`;}
   function renderEditor(){const p=state.work.project,a=analysis(p);const captions=['Спочатку визнач, для кого і для чого існуватиме сайт.','Склади зміст: які сторінки та блоки інформації потрібні?','Розклади сторінки по логічних папках і створи ієрархію.','Перевір дерево, навігацію, глибину й баланс розділів.','Заверши проєкт, завантаж схему й передай роботу вчителю.'];
@@ -158,6 +172,7 @@
     <div class="card"><h2 class="h2">Передати роботу вчителю</h2><p class="desc">Зберегти можна будь-яку чернетку. Позначка «Здано» з’явиться після завершення обов’язкових пунктів.</p>
     ${!validForSubmit(p)?'<div class="notice warn" style="margin-bottom:12px">Поки що не всі обов’язкові умови виконано. Перевір паспорт, щонайменше 5 сторінок, їхні описи й блоки, глибину та назви.</div>':'<div class="notice good" style="margin-bottom:12px">Усі обов’язкові умови виконано. Роботу можна здати!</div>'}
     <div class="btn-row"><button class="btn ghost" data-action="save-draft">◌ Зберегти чернетку</button><button class="btn primary" data-action="submit-work" ${validForSubmit(p)?'':'disabled'}>✓ ${state.work.status==='submitted'?'Оновити здану роботу':'Здати роботу'}</button></div>
+    ${state.work.id?studentReviewMarkup(state.work):''}
     <p class="small muted" style="margin-top:14px">${demo?'У деморежимі «Здати роботу» лише збереже її локально.':'Після здачі вчитель побачить проєкт у своєму кабінеті. Редагувати його можна й після здачі.'}</p></div></div></div>`;}
   function makeSvg(p, author){
     const ordered=flatTree(p), map=new Map(), nodeW=206, nodeH=82, hGap=22, levelGap=166, margin=54, headerH=157;
@@ -196,6 +211,7 @@
   function renderTeacherDashboard(){const works=state.teacherWorks,submitted=works.filter(x=>x.status==='submitted'),classes=[...new Set(state.profiles.map(p=>p.class_name).filter(Boolean))].sort();shell(`<section class="hero"><span class="eyebrow">◇ Teacher Studio</span><h1 class="heading">Кабінет <span>учителя</span></h1>
     <p class="desc">Усі учнівські проєкти в одному місці. Переглядайте схеми, аналізуйте структури, завантажуйте PNG та експортуйте результати.</p><div class="btn-row"><button class="btn primary" data-action="refresh-teacher">↻ Оновити роботи</button><button class="btn ghost" data-action="export-csv">↓ Експорт CSV</button></div></section>
     <div class="grid3" style="margin-bottom:20px"><div class="stat"><small>Усього збережено</small><b>${works.length}</b><small>Усі статуси</small></div><div class="stat"><small>Здані роботи</small><b>${submitted.length}</b><small>Можна перевіряти</small></div><div class="stat"><small>Учнів із роботами</small><b>${new Set(works.map(w=>w.owner_id)).size}</b><small>Унікальних авторів</small></div></div>
+    <div class="notice" style="margin-bottom:16px">Оцінено робіт: <strong>${state.teacherReviews.length}</strong>. Коментар та оцінка доступні у перегляді кожної зданої роботи.</div>
     <section class="card"><div class="editor-heading"><div><h2 class="h2">Реєстр виконаних робіт</h2><p class="desc">За замовчуванням показано тільки здані роботи. Чернетки теж можна переглянути.</p></div></div>
     <div class="teacher-toolbar"><input id="teacher-search" aria-label="Пошук учня чи проєкту" placeholder="Пошук за ім’ям, класом або назвою сайту..." value="${h(state.teacherQuery)}"/>
     <select id="teacher-class" aria-label="Фільтр за класом"><option value="all">Усі класи</option>${classes.map(c=>`<option ${state.teacherClass===c?'selected':''} value="${h(c)}">${h(c)}</option>`).join('')}</select>
@@ -203,26 +219,66 @@
     <div id="teacher-results">${teacherTable()}</div></section>`);}
   function authorOf(ownerId){return state.profiles.find(p=>p.id===ownerId)||{full_name:'Невідомий учень',class_name:'—'};}
   function filteredTeacherWorks(){const q=state.teacherQuery.trim().toLowerCase();return state.teacherWorks.filter(w=>{const p=authorOf(w.owner_id);return (state.teacherStatus==='all'||w.status===state.teacherStatus)&&(state.teacherClass==='all'||p.class_name===state.teacherClass)&&(!q||[p.full_name,p.class_name,w.project?.name,w.project?.topic].some(t=>String(t||'').toLowerCase().includes(q)));});}
-  function teacherTable(){const arr=filteredTeacherWorks();return `<div class="teacher-table-wrap"><table class="teacher-table"><thead><tr><th>Учень</th><th>Проєкт</th><th>Статус</th><th>Оновлено</th><th>Дія</th></tr></thead><tbody>${arr.length?arr.map(w=>{const p=authorOf(w.owner_id),a=analysis(w.project||emptyWork());return `<tr><td><strong>${h(p.full_name)}</strong><small>${h(p.class_name)}</small></td><td><strong>${h(w.project?.name||'Без назви')}</strong><small>${a.pages} сторінок · ${a.score}% готовності</small></td><td><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span></td><td class="small">${fmtDate(w.updated_at)}</td><td><button class="btn sm blue" data-action="teacher-open" data-id="${h(w.id)}">Переглянути →</button></td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty">Не знайдено робіт за вибраними фільтрами.</div></td></tr>`}</tbody></table></div><p class="small muted" style="margin:9px 0 0">Показано ${arr.length} із ${state.teacherWorks.length} збережених робіт</p>`;}
-  function renderTeacherDetail(){const w=state.viewed;if(!w){state.page='dashboard';render();return;}const p=w.project||emptyWork(),a=analysis(p),author=authorOf(w.owner_id);shell(`<div class="btn-row" style="margin-bottom:16px"><button class="btn ghost" data-action="dashboard">← Усі роботи</button><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span></div>
+  function teacherTable(){const arr=filteredTeacherWorks();return `<div class="teacher-table-wrap"><table class="teacher-table"><thead><tr><th>Учень</th><th>Проєкт</th><th>Статус</th><th>Оцінка</th><th>Оновлено</th><th>Дія</th></tr></thead><tbody>${arr.length?arr.map(w=>{const p=authorOf(w.owner_id),a=analysis(w.project||emptyWork()),r=reviewFor(w.id,true);
+    return `<tr><td><strong>${h(p.full_name)}</strong><small>${h(p.class_name)}</small></td><td><strong>${h(w.project?.name||'Без назви')}</strong><small>${a.pages} сторінок · ${a.score}% готовності</small></td><td><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span></td><td><strong>${r?`${r.grade} / 12`:'—'}</strong>${reviewIsOutdated(w,r)?'<small>Змінено після оцінки</small>':''}</td><td class="small">${fmtDate(w.updated_at)}</td><td><button class="btn sm blue" data-action="teacher-open" data-id="${h(w.id)}">Переглянути →</button></td></tr>`;}).join(''):`<tr><td colspan="6"><div class="empty">Не знайдено робіт за вибраними фільтрами.</div></td></tr>`}</tbody></table></div><p class="small muted" style="margin:9px 0 0">Показано ${arr.length} із ${state.teacherWorks.length} збережених робіт</p>`;}
+  function renderTeacherDetail(){const w=state.viewed;if(!w){state.page='dashboard';render();return;}const p=w.project||emptyWork(),a=analysis(p),author=authorOf(w.owner_id),review=reviewFor(w.id,true);shell(`<div class="btn-row" style="margin-bottom:16px"><button class="btn ghost" data-action="dashboard">← Усі роботи</button><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span></div>
     <section class="hero"><span class="eyebrow">Перегляд учнівської роботи</span><h1 class="heading">${h(p.name||'Без назви')}</h1><p class="desc"><strong>${h(author.full_name)}</strong> · ${h(author.class_name)} · Оновлено ${fmtDate(w.updated_at)}</p><div class="btn-row"><button class="btn primary" data-action="teacher-png">↓ Завантажити PNG</button><button class="btn ghost" data-action="teacher-json">↓ Завантажити JSON</button></div></section>
     <div class="grid3" style="margin-bottom:19px"><div class="stat"><small>Сторінок</small><b>${a.pages}</b></div><div class="stat"><small>Макс. глибина</small><b>${a.maxDepth}</b></div><div class="stat"><small>Готовність чекліста</small><b>${a.score}%</b></div></div>
     <div class="card" style="margin-bottom:17px"><h2 class="h2">Структура сайту</h2><div class="tree-view">${makeSvg(p,author)}</div><div class="legend"><span><i class="legend-dot" style="background:#b6f66a"></i>Головна</span><span><i class="legend-dot" style="background:#73afff"></i>Категорія</span><span><i class="legend-dot" style="background:#b2c8e0"></i>Сторінка</span></div></div>
     <div class="grid2"><div class="card"><h2 class="h2">Концепція</h2>${[['Тема',p.topic],['Мета',p.goal],['Аудиторія',p.audience],['Тип',kindLabels[p.kind]],['Структура',structureLabels[p.structure]],['Принцип групування',orgLabels[p.organize]]].map(([k,v])=>`<div class="summary-kv"><span>${h(k)}</span><strong>${h(v||'—')}</strong></div>`).join('')}</div>
     <div class="card"><h2 class="h2">Зміст сторінок</h2>${flatTree(p).filter(({node})=>node.type!=='folder').map(({node,depth})=>`<div class="card inset" style="margin-bottom:9px"><strong>${'↳ '.repeat(depth)}${h(node.label)}</strong><p class="small muted" style="margin:3px 0">${h(node.description||'Опис відсутній')}</p><div class="tagrow">${(node.blocks||[]).map(b=>`<span class="tag">${h(b)}</span>`).join('')}</div><small class="muted">${h(filePath(p,node.id))}</small></div>`).join('')}</div></div>
+    <div class="card review-card" style="margin-top:17px"><span class="eyebrow">Перевірка учнівської роботи</span><h2 class="h2">Оцінка та коментар учителя</h2>
+    ${w.status!=='submitted'?'<div class="notice warn">Це чернетка. Оцінити можна тільки після здавання роботи учнем.</div>':`
+    ${review?`<div class="notice good">Остання оцінка: <strong>${review.grade} / 12</strong> · ${fmtDate(review.reviewed_at)}${reviewIsOutdated(w,review)?' · Учень змінив роботу після перевірки':''}</div>`:''}
+    <div class="form-grid" style="margin-top:13px"><div class="field"><label for="teacher-grade">Оцінка (12-бальна шкала)</label><select id="teacher-grade"><option value="">Оберіть оцінку</option>${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${review?.grade===i+1?'selected':''}>${i+1} / 12</option>`).join('')}</select></div></div>
+    <div class="field"><label for="teacher-comment">Коментар до роботи</label><textarea id="teacher-comment" rows="4" maxlength="1500" placeholder="Що вдалося? Що можна вдосконалити?">${h(review?.comment||'')}</textarea></div>
+    <div class="btn-row"><button class="btn primary" data-action="save-review">Зберегти оцінку та коментар</button><span class="small muted">Учень побачить відгук у своїй роботі.</span></div>`}
+    </div>
     <div class="card" style="margin-top:17px"><h2 class="h2">Навчальний чекліст</h2><div class="grid2">${a.specs.map(c=>`<div class="check ${c.ok?'ok':'warn'}"><span>${c.ok?'✅':'◯'}</span><div><strong>${h(c.name)}</strong><p>${h(c.detail)}</p></div></div>`).join('')}</div><p class="small muted">Показник готовності автоматичний і не є оцінкою за 12-бальною шкалою. Остаточну оцінку визначає вчитель.</p></div>`);}
-  function downloadCSV(){const rows=[['Учень','Клас','Проєкт','Тип','Тема','Статус','Сторінок','Розділів','Глибина','Готовність, %','Оновлено']];for(const w of filteredTeacherWorks()){const p=w.project||emptyWork(),a=analysis(p),au=authorOf(w.owner_id);rows.push([au.full_name,au.class_name,p.name,kindLabels[p.kind]||'',p.topic,w.status,a.pages,a.folders,a.maxDepth,a.score,fmtDate(w.updated_at)]);}const csv='\ufeff'+rows.map(row=>row.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(';')).join('\r\n');saveBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}),'SiteArchitect_works.csv');}
+  function downloadCSV(){const rows=[['Учень','Клас','Проєкт','Тип','Тема','Статус','Сторінок','Розділів','Глибина','Готовність, %','Оцінка 1–12','Коментар','Оцінено','Оновлено']];
+    for(const w of filteredTeacherWorks()){const p=w.project||emptyWork(),a=analysis(p),au=authorOf(w.owner_id),r=reviewFor(w.id,true);rows.push([au.full_name,au.class_name,p.name,kindLabels[p.kind]||'',p.topic,w.status,a.pages,a.folders,a.maxDepth,a.score,r?.grade??'',r?.comment||'',fmtDate(r?.reviewed_at),fmtDate(w.updated_at)]);}
+    const cell=value=>{let str=String(value??'');if(/^[\s]*[=+\-@]/.test(str))str="'"+str;return '"'+str.replaceAll('"','""')+'"';};
+    const csv='\ufeff'+rows.map(row=>row.map(cell).join(';')).join('\r\n');saveBlob(new Blob([csv],{type:'text/csv;charset=utf-8'}),'SiteArchitect_works.csv');}
 
-  async function loadStudentWorks(){if(demo){try{state.works=JSON.parse(localStorage.getItem('sa11.works')||'[]');}catch{state.works=[];}return;}
-    const {data,error}=await db.from('site_projects').select('id,owner_id,project,status,created_at,updated_at').order('updated_at',{ascending:false});if(error){toast('Не вдалося завантажити роботи: '+error.message,true);return;}state.works=data||[];}
-  async function loadTeacherWorks(){const [w,p]=await Promise.all([
+  async function loadStudentWorks(){if(demo){try{state.works=JSON.parse(localStorage.getItem('sa11.works')||'[]');}catch{state.works=[];}state.reviews=[];return;}
+    const [w,r]=await Promise.all([
       db.from('site_projects').select('id,owner_id,project,status,created_at,updated_at').order('updated_at',{ascending:false}),
-      db.from('profiles').select('id,full_name,class_name,role')]);
-    if(w.error||p.error)throw new Error(w.error?.message||p.error?.message);state.teacherWorks=w.data||[];state.profiles=p.data||[];}
+      db.from('site_project_reviews').select('project_id,grade,comment,reviewed_at')
+    ]);
+    if(w.error)throw new Error('Не вдалося завантажити роботи: '+w.error.message);
+    if(r.error)throw new Error('Потрібно виконати migration_v2.sql у Supabase: '+r.error.message);
+    state.works=w.data||[];state.reviews=r.data||[];}
+  async function loadTeacherWorks(){const [w,p,r]=await Promise.all([
+      db.from('site_projects').select('id,owner_id,project,status,created_at,updated_at').order('updated_at',{ascending:false}),
+      db.from('profiles').select('id,full_name,class_name,role'),
+      db.from('site_project_reviews').select('project_id,grade,comment,reviewed_at')
+    ]);
+    if(w.error||p.error)throw new Error(w.error?.message||p.error?.message);
+    if(r.error)throw new Error('Потрібно виконати migration_v2.sql у Supabase: '+r.error.message);
+    state.teacherWorks=w.data||[];state.profiles=p.data||[];state.teacherReviews=r.data||[];}
+  async function saveReview(){if(!cloud||state.profile?.role!=='teacher'||state.busy)return;
+    const w=state.viewed;if(!w||w.status!=='submitted'){toast('Оцінити можна лише здану роботу.',true);return;}
+    const grade=Number(document.getElementById('teacher-grade')?.value);
+    const comment=(document.getElementById('teacher-comment')?.value||'').trim();
+    if(!Number.isInteger(grade)||grade<1||grade>12){toast('Оберіть оцінку від 1 до 12.',true);return;}
+    if(comment.length>1500){toast('Коментар надто довгий.',true);return;}
+    state.busy=true;
+    try{
+      const exists=reviewFor(w.id,true);
+      const query=exists?
+        db.from('site_project_reviews').update({grade,comment}).eq('project_id',w.id):
+        db.from('site_project_reviews').insert({project_id:w.id,grade,comment});
+      const {data,error}=await query.select('project_id,grade,comment,reviewed_at').single();
+      if(error)throw error;
+      const idx=state.teacherReviews.findIndex(r=>r.project_id===w.id);
+      if(idx<0)state.teacherReviews.push(data);else state.teacherReviews[idx]=data;
+      render();toast('Оцінку й коментар збережено. Учень побачить їх після оновлення.');
+    }catch(err){toast('Не вдалося зберегти відгук: '+(err.message||err),true);}finally{state.busy=false;}
+  }
   async function loadProfile(){if(demo)return;const {data:{user},error:authErr}=await db.auth.getUser();if(authErr||!user){state.user=null;state.profile=null;render();return;}state.user=user;
     const {data, error}=await db.from('profiles').select('id,full_name,class_name,role').eq('id',user.id).single();
     if(error||!data){state.profile=null;state.authError='Профіль не знайдено. Перевірте, чи виконано SQL-файл schema.sql. '+(error?.message||'');render();return;}
-    state.profile=data;state.page='dashboard';if(data.role==='teacher')await loadTeacherWorks();else await loadStudentWorks();render();}
+    state.profile=data;state.page='dashboard';try{if(data.role==='teacher')await loadTeacherWorks();else await loadStudentWorks();}catch(err){state.profile=null;state.authError=err.message||String(err);renderAuth();return;}render();}
   async function saveWork(status='draft'){if(!state.work||state.busy)return false;const p=clone(state.work.project);const effective=(state.work.status==='submitted'&&status==='draft')?'submitted':status;
     state.busy=true;try{let record;if(demo){const now=new Date().toISOString();record={...state.work,id:state.work.id||uid(),owner_id:'demo',project:p,status:effective,created_at:state.work.created_at||now,updated_at:now};const index=state.works.findIndex(w=>w.id===record.id);if(index<0)state.works.unshift(record);else state.works[index]=record;localStorage.setItem('sa11.works',JSON.stringify(state.works));}
       else{const payload={project:p,status:effective};let result;
@@ -242,17 +298,42 @@
       if(el.id==='teacher-search'){state.teacherQuery=el.value;const area=document.getElementById('teacher-results');if(area)area.innerHTML=teacherTable();}});
     root.addEventListener('change',e=>{const el=e.target;if(el.dataset.parent){changeParent(el.dataset.parent,el.value);return;}if(el.id==='teacher-status'||el.id==='teacher-class'){if(el.id==='teacher-status')state.teacherStatus=el.value;else state.teacherClass=el.value;const area=document.getElementById('teacher-results');if(area)area.innerHTML=teacherTable();}});
     root.addEventListener('keydown',e=>{if(e.target.id==='new-block'&&e.key==='Enter'){e.preventDefault();const btn=root.querySelector('[data-action="add-block"]');btn?.click();}});
-    root.addEventListener('submit',async e=>{e.preventDefault();if(e.target.id==='demo-form'){const fd=new FormData(e.target);const full_name=String(fd.get('fullName')||'').trim(),class_name=String(fd.get('className')||'').trim();if(!full_name||!class_name){toast('Заповни ім’я та клас.',true);return;}state.profile={id:'demo',full_name,class_name,role:'student'};state.demoProfile=state.profile;localStorage.setItem('sa11.profile',JSON.stringify(state.profile));state.page='dashboard';await loadStudentWorks();render();return;}
-      if(e.target.id==='auth-form'){const fd=new FormData(e.target),email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');if(state.busy)return;state.busy=true;state.authMessage='';state.authError='';try{
-          if(state.authMode==='signup'){const full_name=String(fd.get('fullName')||'').trim(),class_name=String(fd.get('className')||'').trim();if(!full_name||!class_name)throw new Error('Укажіть ім’я та клас.');const {data,error}=await db.auth.signUp({email,password,options:{data:{full_name,class_name},emailRedirectTo:location.href.split('#')[0]}});if(error)throw error;if(data.session){await loadProfile();toast('Обліковий запис створено.');return;}state.authMessage='Реєстрацію отримано. Якщо для проєкту ввімкнене підтвердження пошти, перевірте свою скриньку та перейдіть за посиланням.';}
-          else{const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;await loadProfile();return;}
-        }catch(err){state.authError=err.message||String(err);}finally{state.busy=false;}render();return;}
+    root.addEventListener('submit',async e=>{e.preventDefault();
+      if(e.target.id==='student-form'){
+        if(state.busy)return;
+        const fd=new FormData(e.target),full_name=String(fd.get('fullName')||'').trim(),class_name=String(fd.get('className')||'').trim();
+        if(full_name.length<3||!class_name){state.authError='Вкажи ім’я, прізвище та клас.';render();return;}
+        state.busy=true;state.authError='';
+        try{
+          if(demo){state.profile={id:'demo',full_name,class_name,role:'student'};state.demoProfile=state.profile;localStorage.setItem('sa11.profile',JSON.stringify(state.profile));state.page='dashboard';await loadStudentWorks();render();}
+          else{
+            const {data,error}=await db.auth.signInAnonymously({options:{data:{full_name,class_name}}});
+            if(error)throw error;
+            if(!data?.session)throw new Error('Не вдалося створити захищений тимчасовий сеанс.');
+            await loadProfile();
+            toast('Привіт! Можна розпочинати практичну роботу.');
+          }
+        }catch(err){state.authError=(err.message||String(err))+' Перевірте в Supabase, чи ввімкнено Anonymous Sign-Ins.';render();}
+        finally{state.busy=false;}
+        return;
+      }
+      if(e.target.id==='teacher-form'){
+        if(!cloud||state.busy)return;
+        const fd=new FormData(e.target),email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
+        state.busy=true;state.authError='';
+        try{const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;
+          await loadProfile();if(state.profile?.role!=='teacher'){
+            await db.auth.signOut();state.user=null;state.profile=null;state.authError='Для цього входу потрібен обліковий запис учителя.';render();
+          }
+        }catch(err){state.authError=err.message||String(err);render();}
+        finally{state.busy=false;}
+      }
     });
     root.addEventListener('click',async e=>{const btn=e.target.closest('[data-action]');if(!btn||btn.disabled)return;const action=btn.dataset.action,p=state.work?.project;try{
       switch(action){
-        case 'auth-mode':state.authMode=btn.dataset.mode;state.authError='';state.authMessage='';render();break;
+        case 'auth-mode':state.authMode=btn.dataset.mode==='teacher'?'teacher':'student';state.authError='';state.authMessage='';render();break;
         case 'reset-password':{if(!cloud)return;const email=prompt('Введіть адресу електронної пошти для відновлення пароля:');if(!email)return;const {error}=await db.auth.resetPasswordForEmail(email.trim(),{redirectTo:location.href.split('#')[0]});if(error)toast(error.message,true);else toast('Якщо обліковий запис існує, лист надійде на пошту (потрібен налаштований SMTP).');break;}
-        case 'logout':if(cloud){await db.auth.signOut();state.user=null;}else{state.demoProfile=state.profile;localStorage.removeItem('sa11.profile');}state.profile=null;state.work=null;state.page='dashboard';render();break;
+        case 'logout':{if(state.profile?.role!=='teacher'&&!confirm('Після завершення тимчасового сеансу ти не зможеш увійти знову до своїх робіт без допомоги вчителя. Завершити сеанс?'))break;if(cloud){await db.auth.signOut();state.user=null;}else{state.demoProfile=state.profile;localStorage.removeItem('sa11.profile');}state.profile=null;state.work=null;state.page='dashboard';state.authMode='student';render();break;}
         case 'dashboard':case 'editor-back':state.page='dashboard';state.work=null;if(state.profile.role==='teacher')await loadTeacherWorks();else await loadStudentWorks();render();break;
         case 'new-project':newProject();break;
         case 'create-template':newProject(btn.dataset.template);break;
@@ -279,6 +360,7 @@
         case 'teacher-open':state.viewed=state.teacherWorks.find(w=>w.id===btn.dataset.id);state.page='detail';render();window.scrollTo(0,0);break;
         case 'teacher-png':downloadPNG(state.viewed.project,authorOf(state.viewed.owner_id));break;
         case 'teacher-json':downloadJSON(state.viewed.project,authorOf(state.viewed.owner_id));break;
+        case 'save-review':await saveReview();break;
       }
       }catch(err){toast(err?.message||String(err),true);}
     });
