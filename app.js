@@ -105,7 +105,29 @@
     ${state.page==='editor'?navLink('editor-back','Конструктор','⌘',true):''}
     </div><div class="side-bottom"><small>${demo?'Демонстраційний режим':teacher?'Профіль учителя':'Профіль учня'}</small><strong>${h(state.profile?.full_name)}</strong><small>${h(state.profile?.class_name||'Кабінет учителя')}</small><button class="btn sm ghost full" style="margin-top:10px" data-action="logout">${!teacher?'Завершити сеанс':'Вийти'}</button></div>
     </aside><main class="main"><div class="topbar"><div class="crumb">SiteArchitect 11 <span class="muted"> / </span> <strong>${teacher?'Teacher Studio':'Student Studio'}</strong></div><div class="top-right"><span class="pill">${demo?'◌ ДЕМО':'● Онлайн'}</span><button class="btn sm ghost" data-action="logout">${!teacher?'Завершити сеанс ↗':'Вийти ↗'}</button></div></div>${body}</main></div>`;}
-  function render(){if(!state.profile){renderAuth();return;}if(state.page==='editor'){renderEditor();return;}if(state.page==='detail'){renderTeacherDetail();return;}if(state.profile.role==='teacher')renderTeacherDashboard();else renderStudentDashboard();}
+  function render(){if(!state.profile){renderAuth();return;}if(state.page==='editor'){renderEditor();return;}if(state.page==='detail'){renderTeacherDetail();focusTreeCenter();return;}if(state.profile.role==='teacher')renderTeacherDashboard();else renderStudentDashboard();}
+  function focusTreeCenter(){
+    const view=root.querySelector('.tree-view');
+    if(!view)return;
+    // The root node sits around the middle of the SVG, not at its far left.
+    view.scrollLeft=Math.max(0,(view.scrollWidth-view.clientWidth)/2);
+  }
+  function zoomTree(direction){
+    const view=root.querySelector('.tree-view'), svg=view?.querySelector('svg');
+    if(!view||!svg)return;
+    const baseW=Number(svg.getAttribute('width'))||900,baseH=Number(svg.getAttribute('height'))||500;
+    let scale=Number(svg.dataset.scale||1);
+    if(direction==='in')scale=Math.min(1.8,Math.round((scale+0.2)*100)/100);
+    else if(direction==='out')scale=Math.max(0.35,Math.round((scale-0.2)*100)/100);
+    else if(direction==='fit')scale=Math.min(1,Math.max(.2,Math.round((view.clientWidth-12)/baseW*100)/100));
+    const ratio=(view.scrollLeft+view.clientWidth/2)/Math.max(view.scrollWidth,1);
+    svg.dataset.scale=String(scale);
+    svg.style.width=Math.round(baseW*scale)+'px';
+    svg.style.height=Math.round(baseH*scale)+'px';
+    view.scrollLeft=ratio*view.scrollWidth-view.clientWidth/2;
+    const label=root.querySelector('.tree-zoom-value');
+    if(label)label.textContent=Math.round(scale*100)+'%';
+  }
   function reviewFor(id, teacher=false){return (teacher?state.teacherReviews:state.reviews).find(r=>r.project_id===id)||null;}
   function reviewIsOutdated(w,r){return !!r && new Date(w.updated_at).getTime()>new Date(r.reviewed_at).getTime()+2000;}
   function studentReviewMarkup(w){const r=reviewFor(w.id);if(!r)return w.status==='submitted'?'<span class="pill">Очікує перевірки</span>':'';
@@ -126,7 +148,15 @@
     const stepBar=`<div class="steps">${steps.map((s,i)=>`<button class="step ${i===state.step?'active':i<state.step?'completed':''}" data-action="go-step" data-step="${i}"><span class="step-num">${i<state.step?'✓':i+1}</span>${s}</button>`).join('')}</div>`;
     let section = state.step===0?stepPassport(p):state.step===1?stepContent(p):state.step===2?stepGroup(p):state.step===3?stepTree(p,a):stepResult(p,a);
     const footer=`<div class="editor-footer"><button class="btn ghost" data-action="go-step" data-step="${Math.max(0,state.step-1)}" ${state.step===0?'disabled':''}>← Назад</button><div class="btn-row"><span class="small muted">Крок ${state.step+1} з 5</span>${state.step<4?`<button class="btn primary" data-action="go-step" data-step="${state.step+1}">Далі →</button>`:`<button class="btn primary" data-action="submit-work">✓ Здати роботу</button>`}</div></div>`;
-    shell(`${pageHeader('Конструктор структури',captions[state.step])}${stepBar}${section}${footer}`);}
+    shell(`${pageHeader('Конструктор структури',captions[state.step])}${stepBar}${section}${footer}`);
+    // Keep the current wizard step centered in its swipeable track on phones.
+    const strip=root.querySelector('.steps'),active=strip?.querySelector('.step.active');
+    if(active&&window.matchMedia('(max-width: 639px)').matches){
+      const x=active.getBoundingClientRect().left-strip.getBoundingClientRect().left+strip.scrollLeft;
+      strip.scrollLeft=Math.max(0,x-(strip.clientWidth-active.clientWidth)/2);
+    }
+    focusTreeCenter();
+  }
   function inputField(label,name,value,placeholder='',opts={}){return `<div class="field"><label for="f-${name}">${label}</label>${opts.textarea?`<textarea id="f-${name}" data-field="${name}" placeholder="${h(placeholder)}" maxlength="${opts.max||500}" rows="3">${h(value)}</textarea>`:`<input id="f-${name}" data-field="${name}" maxlength="${opts.max||130}" placeholder="${h(placeholder)}" value="${h(value)}"/>`}</div>`;}
   function selectField(label,name,value,options){return `<div class="field"><label for="f-${name}">${label}</label><select id="f-${name}" data-field="${name}">${Object.entries(options).map(([k,v])=>`<option value="${h(k)}" ${value===k?'selected':''}>${h(v)}</option>`).join('')}</select></div>`;}
   function stepPassport(p){return `<div class="split"><section class="card"><span class="eyebrow">01 / Концепція</span><h2 class="h2">Паспорт майбутнього сайту</h2><div class="form-grid">
@@ -150,7 +180,9 @@
   function stepContent(p){return `<div class="split"><section class="card"><div class="editor-heading"><div><span class="eyebrow">02 / Складові</span><h2 class="h2">Сторінки й блоки вмісту</h2><p class="desc">Створи не менше 5 змістовних сторінок. Кожна має власне призначення.</p></div></div>
     <div class="btn-row" style="margin-bottom:14px"><button class="btn sm primary" data-action="add-page">+ Сторінка</button><button class="btn sm ghost" data-action="add-folder">+ Папка</button></div>
     <div class="outline-list">${outline(p)}</div><div class="tip-card"><strong>✦ З чого почати?</strong><p>Спочатку випиши всі сторінки. Групувати їх по розділах зможеш на кроці 3. Пам’ятай про головну сторінку, пошук інформації та зворотний зв’язок.</p></div></section>
-    <section class="card"><h2 class="h2">Редактор елемента</h2><p class="desc">Вибери елемент зліва, а потім опиши, що він міститиме.</p>${nodeDetail(p)}</section></div>`;}
+    <section class="card"><h2 class="h2">Редактор елемента</h2><p class="desc">Вибери елемент зліва, а потім опиши, що він міститиме.</p>
+    <div class="mobile-node-picker"><label for="mobile-node-select">Редагувати сторінку або розділ</label><select id="mobile-node-select" aria-label="Обрати сторінку або розділ для редагування">${flatTree(p).map(({node})=>`<option value="${h(node.id)}" ${state.selected===node.id?'selected':''}>${h(node.type==='folder'?'▣ ':node.type==='home'?'⌂ ':'▤ ')}${h(node.label)}</option>`).join('')}</select></div>
+    ${nodeDetail(p)}</section></div>`;}
   function parentsOptions(p,n){return p.nodes.filter(x=>(x.type==='home'||x.type==='folder')&&x.id!==n.id&&!isDescendant(p,x.id,n.id)).map(x=>`<option value="${h(x.id)}" ${n.parentId===x.id?'selected':''}>${h(x.type==='home'?'⌂ Головна':`▣ ${x.label}`)}</option>`).join('');}
   function stepGroup(p){return `<div class="split"><section class="card"><span class="eyebrow">03 / Ієрархія</span><h2 class="h2">Згрупуй сторінки логічно</h2><p class="desc">Для кожного елемента обери батьківську папку. Стрілки змінюють порядок у межах одного розділу.</p>
     <div class="btn-row" style="margin-bottom:15px"><button class="btn sm primary" data-action="add-folder">+ Новий розділ</button><button class="btn sm ghost" data-action="add-page">+ Сторінка</button></div>
@@ -161,7 +193,7 @@
     <div class="btn-row" style="margin-top:14px"><button class="btn sm blue" data-action="download-png">↓ Завантажити PNG</button><button class="btn sm ghost" data-action="download-json">↓ JSON проєкту</button></div></div>
     <div class="card"><h2 class="h2">Поради цифрового архітектора</h2><p class="desc">Програма перевіряє структуру й пояснює, що можна покращити.</p>${a.warnings.length?a.warnings.slice(0,5).map(w=>`<div class="notice warn" style="margin-bottom:8px">⚠ ${h(w)}</div>`).join(''):'<div class="notice good">✓ Проблем із логікою структури не виявлено. Продовжуй!</div>'}
     <div class="notice" style="margin-top:10px">Правило «3 кліків» — навчальний орієнтир з презентації, а не абсолютна вимога до всіх реальних сайтів.</div></div></div>
-    <div class="card"><div class="editor-heading"><div><h2 class="h2">Карта сторінок · ${h(p.name||'Мій сайт')}</h2><p class="desc">Схему можна прокручувати горизонтально, якщо вона широка.</p></div><span class="pill">SVG → PNG</span></div><div class="tree-view" id="tree-render">${makeSvg(p, state.profile)}</div><div class="legend"><span><i class="legend-dot" style="background:#b6f66a"></i>Головна</span><span><i class="legend-dot" style="background:#73afff"></i>Категорія / папка</span><span><i class="legend-dot" style="background:#b2c8e0"></i>Сторінка</span></div></div>
+    <div class="card"><div class="editor-heading"><div><h2 class="h2">Карта сторінок · ${h(p.name||'Мій сайт')}</h2><p class="desc">Схему можна прокручувати горизонтально, якщо вона широка.</p></div><span class="pill">SVG → PNG</span></div><div class="tree-controls" aria-label="Масштаб дерева сайту"><span class="small muted">Масштаб схеми</span><div class="tree-zoom-actions"><button class="btn sm ghost" data-action="tree-zoom" data-zoom="out" aria-label="Зменшити масштаб">−</button><span class="tree-zoom-value" aria-live="polite">100%</span><button class="btn sm ghost" data-action="tree-zoom" data-zoom="in" aria-label="Збільшити масштаб">+</button><button class="btn sm ghost" data-action="tree-zoom" data-zoom="fit" aria-label="Показати всю схему">Умістити</button></div></div><p class="tree-mobile-hint">⇆ Проведи пальцем убік, щоб переглянути всю схему.</p><div class="tree-view" role="region" aria-label="Схема дерева сайту: прокручуйте горизонтально" tabindex="0" id="tree-render">${makeSvg(p, state.profile)}</div><div class="legend"><span><i class="legend-dot" style="background:#b6f66a"></i>Головна</span><span><i class="legend-dot" style="background:#73afff"></i>Категорія / папка</span><span><i class="legend-dot" style="background:#b2c8e0"></i>Сторінка</span></div></div>
     <div class="card"><h2 class="h2">Перехресні посилання <span class="small muted">(за потреби)</span></h2><p class="desc">Щоб змоделювати гібридну чи мережеву структуру, додай переходи між різними сторінками. На схемі вони показані пунктиром.</p>
     <div class="form-grid"><div class="field"><label>Зі сторінки</label><select id="link-from">${pageOptions}</select></div><div class="field"><label>На сторінку</label><select id="link-to">${pageOptions}</select></div></div><button class="btn sm blue" data-action="add-link">+ Додати перехід</button>
     <div class="tagrow" style="margin-top:14px">${(p.links||[]).map((link,i)=>`<span class="tag">${h(getNode(p,link.from)?.label||'?')} ↗ ${h(getNode(p,link.to)?.label||'?')} <button data-action="remove-link" data-idx="${i}" class="btn sm ghost icon-only" style="min-height:25px;padding:1px 6px;margin-left:4px">×</button></span>`).join('')}</div></div></div>`;}
@@ -224,7 +256,7 @@
   function renderTeacherDetail(){const w=state.viewed;if(!w){state.page='dashboard';render();return;}const p=w.project||emptyWork(),a=analysis(p),author=authorOf(w.owner_id),review=reviewFor(w.id,true);shell(`<div class="btn-row" style="margin-bottom:16px"><button class="btn ghost" data-action="dashboard">← Усі роботи</button><span class="status ${w.status==='submitted'?'done':'draft'}">${w.status==='submitted'?'✓ Здано':'◌ Чернетка'}</span></div>
     <section class="hero"><span class="eyebrow">Перегляд учнівської роботи</span><h1 class="heading">${h(p.name||'Без назви')}</h1><p class="desc"><strong>${h(author.full_name)}</strong> · ${h(author.class_name)} · Оновлено ${fmtDate(w.updated_at)}</p><div class="btn-row"><button class="btn primary" data-action="teacher-png">↓ Завантажити PNG</button><button class="btn ghost" data-action="teacher-json">↓ Завантажити JSON</button></div></section>
     <div class="grid3" style="margin-bottom:19px"><div class="stat"><small>Сторінок</small><b>${a.pages}</b></div><div class="stat"><small>Макс. глибина</small><b>${a.maxDepth}</b></div><div class="stat"><small>Готовність чекліста</small><b>${a.score}%</b></div></div>
-    <div class="card" style="margin-bottom:17px"><h2 class="h2">Структура сайту</h2><div class="tree-view">${makeSvg(p,author)}</div><div class="legend"><span><i class="legend-dot" style="background:#b6f66a"></i>Головна</span><span><i class="legend-dot" style="background:#73afff"></i>Категорія</span><span><i class="legend-dot" style="background:#b2c8e0"></i>Сторінка</span></div></div>
+    <div class="card" style="margin-bottom:17px"><h2 class="h2">Структура сайту</h2><div class="tree-controls" aria-label="Масштаб дерева сайту"><span class="small muted">Масштаб схеми</span><div class="tree-zoom-actions"><button class="btn sm ghost" data-action="tree-zoom" data-zoom="out" aria-label="Зменшити масштаб">−</button><span class="tree-zoom-value" aria-live="polite">100%</span><button class="btn sm ghost" data-action="tree-zoom" data-zoom="in" aria-label="Збільшити масштаб">+</button><button class="btn sm ghost" data-action="tree-zoom" data-zoom="fit" aria-label="Показати всю схему">Умістити</button></div></div><p class="tree-mobile-hint">⇆ Проведи пальцем убік, щоб переглянути всю схему.</p><div class="tree-view" role="region" aria-label="Схема дерева сайту: прокручуйте горизонтально" tabindex="0">${makeSvg(p,author)}</div><div class="legend"><span><i class="legend-dot" style="background:#b6f66a"></i>Головна</span><span><i class="legend-dot" style="background:#73afff"></i>Категорія</span><span><i class="legend-dot" style="background:#b2c8e0"></i>Сторінка</span></div></div>
     <div class="grid2"><div class="card"><h2 class="h2">Концепція</h2>${[['Тема',p.topic],['Мета',p.goal],['Аудиторія',p.audience],['Тип',kindLabels[p.kind]],['Структура',structureLabels[p.structure]],['Принцип групування',orgLabels[p.organize]]].map(([k,v])=>`<div class="summary-kv"><span>${h(k)}</span><strong>${h(v||'—')}</strong></div>`).join('')}</div>
     <div class="card"><h2 class="h2">Зміст сторінок</h2>${flatTree(p).filter(({node})=>node.type!=='folder').map(({node,depth})=>`<div class="card inset" style="margin-bottom:9px"><strong>${'↳ '.repeat(depth)}${h(node.label)}</strong><p class="small muted" style="margin:3px 0">${h(node.description||'Опис відсутній')}</p><div class="tagrow">${(node.blocks||[]).map(b=>`<span class="tag">${h(b)}</span>`).join('')}</div><small class="muted">${h(filePath(p,node.id))}</small></div>`).join('')}</div></div>
     <div class="card review-card" style="margin-top:17px"><span class="eyebrow">Перевірка учнівської роботи</span><h2 class="h2">Оцінка та коментар учителя</h2>
@@ -294,9 +326,19 @@
   function removeNode(){const p=state.work.project,n=getNode(p,state.selected);if(!n||n.id==='home')return;const subtree=p.nodes.filter(x=>x.id===n.id||isDescendant(p,x.id,n.id));if(!confirm(`Видалити «${n.label}»${subtree.length>1?' разом із вкладеними елементами':''}?`))return;const gone=new Set(subtree.map(n=>n.id));p.nodes=p.nodes.filter(x=>!gone.has(x.id));p.links=p.links.filter(x=>!gone.has(x.from)&&!gone.has(x.to));state.selected='home';render();toast('Елемент видалено.');}
   function changeParent(id,parentId){const p=state.work.project,n=getNode(p,id),parent=getNode(p,parentId);if(!n||!parent||n.id==='home'||!['home','folder'].includes(parent.type)||n.id===parentId||isDescendant(p,parentId,n.id))return;const sibling=children(p,parentId);n.parentId=parentId;n.order=sibling.length;render();}
   function moveOrder(id,dir){const p=state.work.project,n=getNode(p,id);if(!n)return;const sib=children(p,n.parentId),idx=sib.findIndex(x=>x.id===id),other=sib[idx+dir];if(!other)return;const ordered=sib.map(x=>x.id);[ordered[idx],ordered[idx+dir]]=[ordered[idx+dir],ordered[idx]];ordered.forEach((sid,i)=>getNode(p,sid).order=i);render();}
+  function revealMobileEditor(){
+    if(window.matchMedia('(max-width: 639px)').matches){
+      const editor=root.querySelector('.split > section:nth-child(2)');
+      editor?.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+  }
   function bindFormInputs(){root.addEventListener('input',e=>{const el=e.target,key=el.dataset.field;if(key&&state.work){if(key.startsWith('node-'))mutateNodeField(key,el.value);else state.work.project[key]=clip(el.value,key==='goal'?600:150);}
       if(el.id==='teacher-search'){state.teacherQuery=el.value;const area=document.getElementById('teacher-results');if(area)area.innerHTML=teacherTable();}});
-    root.addEventListener('change',e=>{const el=e.target;if(el.dataset.parent){changeParent(el.dataset.parent,el.value);return;}if(el.id==='teacher-status'||el.id==='teacher-class'){if(el.id==='teacher-status')state.teacherStatus=el.value;else state.teacherClass=el.value;const area=document.getElementById('teacher-results');if(area)area.innerHTML=teacherTable();}});
+    root.addEventListener('change',e=>{const el=e.target;
+      if(el.id==='mobile-node-select'){
+        state.selected=el.value;render();revealMobileEditor();return;
+      }
+      if(el.dataset.parent){changeParent(el.dataset.parent,el.value);return;}if(el.id==='teacher-status'||el.id==='teacher-class'){if(el.id==='teacher-status')state.teacherStatus=el.value;else state.teacherClass=el.value;const area=document.getElementById('teacher-results');if(area)area.innerHTML=teacherTable();}});
     root.addEventListener('keydown',e=>{if(e.target.id==='new-block'&&e.key==='Enter'){e.preventDefault();const btn=root.querySelector('[data-action="add-block"]');btn?.click();}});
     root.addEventListener('submit',async e=>{e.preventDefault();
       if(e.target.id==='student-form'){
@@ -341,7 +383,7 @@
         case 'delete-work':await deleteWork(btn.dataset.id);break;
         case 'export-work':{const w=state.works.find(w=>w.id===btn.dataset.id);if(w)downloadPNG(w.project,state.profile);break;}
         case 'go-step':state.step=Number(btn.dataset.step);render();window.scrollTo({top:0,behavior:'smooth'});break;
-        case 'select-node':state.selected=btn.dataset.id;render();break;
+        case 'select-node':state.selected=btn.dataset.id;render();revealMobileEditor();break;
         case 'add-page':addNode('page');break;
         case 'add-folder':addNode('folder');break;
         case 'remove-node':removeNode();break;
@@ -353,6 +395,7 @@
         case 'remove-link':p.links.splice(Number(btn.dataset.idx),1);render();break;
         case 'save-draft':if(await saveWork('draft'))render();break;
         case 'submit-work':if(!validForSubmit(p)){state.step=4;render();toast('Заповни обов’язкові пункти чекліста.',true);return;}if(await saveWork('submitted')){state.step=4;render();}break;
+        case 'tree-zoom':zoomTree(btn.dataset.zoom);break;
         case 'download-png':downloadPNG(p,state.profile);break;
         case 'download-json':downloadJSON(p,state.profile);break;
         case 'refresh-teacher':await loadTeacherWorks();render();toast('Список робіт оновлено.');break;
