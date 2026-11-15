@@ -13,3 +13,18 @@
 /* Allow wide SVG diagrams to scroll inside their card instead of expanding the mobile page. */
 .card,.stack,.split>*,.grid2>*,.grid3>*,.grid4>*,.tree-view{min-width:0}
 .tree-view{width:100%;max-width:100%;overscroll-behavior-x:contain}
+
+/* SiteArchitect 11 v2 — one-time student entry and protected teacher feedback */
+.auth-tabs{margin-bottom:22px}
+.auth-tabs button{transition:background-color .18s,color .18s}
+.auth-tabs button.active{box-shadow:0 0 0 1px #608463 inset}
+.student-review{margin-top:12px;padding:11px 13px;background:#183a34;border:1px solid #55785c;border-radius:12px;max-width:650px}
+.student-review .btn-row{gap:12px;align-items:center}
+.student-review strong{color:#e9fbdc;font-size:12px}
+.student-review .grade-value{font-size:21px;font-weight:800;white-space:nowrap;color:#c4ff8b}
+.student-review p{margin:7px 0 1px;color:#def1e0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+.review-card{border-color:#446d65;background:linear-gradient(145deg,#193b3a,#122438 78%)}
+.review-card .field{max-width:860px}
+.review-card textarea{resize:vertical;min-height:105px}
+.review-card select{max-width:300px}
+@media(max-width:570px){.student-review{width:100%}.teacher-table{min-width:800px}}
